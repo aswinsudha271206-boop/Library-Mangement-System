@@ -59,7 +59,7 @@ export default function Books({ books, onAddBook, onUpdateBook, onDeleteBook }) 
       initial="hidden"
       animate="show"
       variants={containerVariants}
-      className="space-y-6"
+      className="space-y-6 pb-24 overflow-y-auto h-full"
     >
       {/* View Header section */}
       <motion.div variants={itemVariants} className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">

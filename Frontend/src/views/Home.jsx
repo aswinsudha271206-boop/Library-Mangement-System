@@ -40,6 +40,8 @@ export default function Home({ books = [], onIssueRequest }) {
   const [holdFeedback, setHoldFeedback] = useState('');
   const [holdAmount, setHoldAmount] = useState('2.00');
   const [paymentMethod, setPaymentMethod] = useState('UPI');
+  const [holdDueDate, setHoldDueDate] = useState('');
+  const [holdUserId, setHoldUserId] = useState('');
 
   // 🔔 Animated Access Banner Control States & Re-mounting Key Counter
   const [showAccessAlert, setShowAccessAlert] = useState(false);
@@ -79,7 +81,6 @@ export default function Home({ books = [], onIssueRequest }) {
 
   setLookupLoading(true);
   try {
-    // Queries backend for student profile[cite: 4]
     const response = await fetch(`http://localhost:8000/api/students/verify/${passForm.rollNumber.trim()}`);
     
     if (response.ok) {
@@ -182,9 +183,10 @@ export default function Home({ books = [], onIssueRequest }) {
         },
         body: JSON.stringify({
           book_id: activeBookForHold.id,
-          user_id: loggedInUserId,
+          user_id: parseInt(holdUserId) || loggedInUserId,
           amount: parseFloat(holdAmount) || 0.0,
-          payment_method: paymentMethod
+          payment_method: paymentMethod,
+          due_date: holdDueDate ? new Date(holdDueDate).toISOString() : null
         })
       });
 
@@ -197,6 +199,8 @@ export default function Home({ books = [], onIssueRequest }) {
         setTimeout(() => {
           setIsHoldModalOpen(false);
           setActiveBookForHold(null);
+          setHoldDueDate('');
+          setHoldUserId('');
         }, 1800);
       } else {
         setHoldFeedback(`❌ Hold Failed: ${responseData.detail || 'Server rejected request'}`);
@@ -209,6 +213,8 @@ export default function Home({ books = [], onIssueRequest }) {
       setTimeout(() => {
         setIsHoldModalOpen(false);
         setActiveBookForHold(null);
+        setHoldDueDate('');
+        setHoldUserId('');
       }, 1800);
     } finally {
       setHoldLoading(false);
@@ -576,6 +582,27 @@ export default function Home({ books = [], onIssueRequest }) {
 
             <div className="space-y-4 mb-5 text-left">
               <div>
+                <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1 tracking-wider">Student ID / Member Number</label>
+                <input
+                  type="number"
+                  placeholder="Enter Student ID"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-200 focus:outline-none focus:border-indigo-500 text-sm"
+                  value={holdUserId}
+                  onChange={(e) => setHoldUserId(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1 tracking-wider">Return Deadline (Due Date)</label>
+                <input
+                  type="date"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-200 focus:outline-none focus:border-indigo-500 text-sm"
+                  value={holdDueDate}
+                  onChange={(e) => setHoldDueDate(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
                 <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1 tracking-wider">Reservation Fee (₹)</label>
                 <input
                   type="number"
@@ -617,6 +644,8 @@ export default function Home({ books = [], onIssueRequest }) {
                 onClick={() => {
                   setIsHoldModalOpen(false);
                   setActiveBookForHold(null);
+                  setHoldDueDate('');
+                  setHoldUserId('');
                 }} 
                 className="flex-1 border border-slate-800 text-slate-400 hover:bg-slate-800/40 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer disabled:opacity-40"
               >

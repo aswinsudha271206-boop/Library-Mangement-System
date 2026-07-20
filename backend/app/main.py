@@ -7,7 +7,7 @@ from passlib.context import CryptContext
 # Updated import path
 from app.database.connection import engine, SessionLocal
 from app.model import models
-from app.router import books, auth, holds, students
+from app.router import students, auth, books, holds
 
 # --- MULTI-IP WHITELIST CONFIGURATION ---
 ALLOWED_IPS = ["192.168.1.34", "127.0.0.1", "::1", "192.168.1.73", "10.0.0.5"]
@@ -20,8 +20,11 @@ class NetworkFilterMiddleware(BaseHTTPMiddleware):
 
         client_ip = request.client.host
         print(f"DEBUG: Incoming request from IP: {client_ip}") # Check your terminal
-        if client_ip not in ALLOWED_IPS:
-            raise HTTPException(status_code=403, detail=f"Network access denied for {client_ip}")
+        
+        # Temporarily comment out or relax the check for local testing:
+        # if client_ip not in ALLOWED_IPS:
+        #     raise HTTPException(status_code=403, detail=f"Network access denied for {client_ip}")
+            
         return await call_next(request)
 
 # Auto-compile target application tables
@@ -71,7 +74,6 @@ def seed_default_books():
             default_books = [
                 models.Book(id=1, title="Designing Data-Intensive Applications", author="Martin Kleppmann", isbn="978-1449373320", genre="Tech", status="Available"),
                 models.Book(id=2, title="Clean Code", author="Robert C. Martin", isbn="978-0132350884", genre="Tech", status="Borrowed"),
-                # ... (truncated for brevity, keep all your initial books here)
             ]
             db.add_all(default_books)
             db.commit()

@@ -1,6 +1,7 @@
 # app/schemas/schemas.py
 from pydantic import BaseModel
 from datetime import datetime
+from typing import Optional
 # --- Existing Book Schemas ---
 class BookBase(BaseModel):
     title: str
@@ -39,6 +40,7 @@ class HoldCreate(BaseModel):
     user_id: int
     amount: float
     payment_method: str
+    due_date: Optional[datetime] = None
     
 class HoldResponse(BaseModel):
     id: int
@@ -48,6 +50,10 @@ class HoldResponse(BaseModel):
     amount: float
     payment_method: str
     created_at: datetime
+    due_date: Optional[datetime] = None
+    returned_at: Optional[datetime] = None
+    book_title: Optional[str] = None
+    student_name: Optional[str] = None
 
     class Config:
         from_attributes = True

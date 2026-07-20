@@ -11,21 +11,32 @@ router = APIRouter(
     tags=["Student Profiles"]
 )
 
-# GET: Return all registered students/members
+# 1. GET: Return all registered students/members
 @router.get("", response_model=List[schemas.StudentResponse])
 def get_all_students(db: Session = Depends(get_db)):
     return db.query(models.Student).order_by(models.Student.id.desc()).all()
 
+# 2. GET: Verify student pass by roll number 
+# (MUST BE PLACED BEFORE ANY /{id} ROUTES)
+@router.get("/verify/{roll_number}", response_model=schemas.StudentResponse)
+def verify_student_pass(roll_number: str, db: Session = Depends(get_db)):
+    student = db.query(models.Student).filter(models.Student.roll_number == roll_number).first()
+    if not student:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="ID not found in database."
+        )
+    return student
+
+# 3. POST: Register new student
 @router.post("", response_model=schemas.StudentResponse, status_code=status.HTTP_201_CREATED)
 def register_student(student_data: schemas.StudentCreate, db: Session = Depends(get_db)):
-    # Check if student already exists by email or roll number
     existing_student = db.query(models.Student).filter(
         (models.Student.email == student_data.email) | 
         (models.Student.roll_number == student_data.roll_number)
     ).first()
     
     if existing_student:
-        # If student exists, update and return them
         existing_student.name = student_data.name
         existing_student.phone = student_data.phone
         existing_student.track = student_data.track
