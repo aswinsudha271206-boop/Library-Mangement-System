@@ -347,7 +347,7 @@ export default function Analytics({ booksCount, membersCount, transactionsCount 
             <span className="text-cyan-400">[METRIC]</span> 
             <span>Lending circulation frequency scope shifted cleanly to <strong className="text-indigo-400 font-semibold">[{timeframe.toUpperCase()}]</strong> bounds.</span>
           </div>
-          <div className="flex gap-4"><span className="text-slate-600">[IDLE]</span> <span>Awaiting live backend endpoints switchover on port 8080...</span></div>
+          <div className="flex gap-4"><span className="text-slate-600">[IDLE]</span> <span>Awaiting live backend endpoints switchover on port 8000...</span></div>
         </div>
       </motion.div>
     </motion.div>

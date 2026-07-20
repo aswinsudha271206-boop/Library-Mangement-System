@@ -1,9 +1,9 @@
 // src/views/Members.jsx
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Search, UserCheck, UserX, X } from 'lucide-react';
+import { Plus, Search, UserCheck, UserX, X, UserPlus } from 'lucide-react';
 
-export default function Members({ members, onAddMember }) {
+export default function Members({ members, onAddMember, setView }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({ name: '', email: '', course: 'MCA', status: 'Active' });
@@ -20,7 +20,6 @@ export default function Members({ members, onAddMember }) {
     setShowModal(false);
   };
 
-  // Orchestration systems layout
   const containerVariants = {
     hidden: { opacity: 0 },
     show: {
@@ -41,23 +40,33 @@ export default function Members({ members, onAddMember }) {
       variants={containerVariants}
       className="space-y-6"
     >
-      {/* View Header section */}
-      <motion.div variants={itemVariants} className="flex justify-between items-center">
+      <motion.div variants={itemVariants} className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-extrabold text-slate-100 tracking-tight">Library Members</h1>
           <p className="text-slate-400 mt-1">Authorize and audit student access accounts.</p>
         </div>
-        <motion.button 
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-5 py-3 rounded-xl transition-colors shadow-lg shadow-indigo-600/20 cursor-pointer"
-        >
-          <Plus className="h-5 w-5" /> Add Member
-        </motion.button>
+        
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <motion.button 
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setView("addStudent")}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-850 text-indigo-400 border border-indigo-950/60 font-semibold px-5 py-3 rounded-xl transition-colors shadow-md cursor-pointer"
+          >
+            <UserPlus className="h-4 w-4" /> Provision Pass
+          </motion.button>
+
+          <motion.button 
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setShowModal(true)}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-5 py-3 rounded-xl transition-colors shadow-lg shadow-indigo-600/20 cursor-pointer"
+          >
+            <Plus className="h-5 w-5" /> Add Member
+          </motion.button>
+        </div>
       </motion.div>
 
-      {/* Search Input field area */}
       <motion.div variants={itemVariants} className="relative">
         <Search className="absolute left-4 top-3.5 h-5 w-5 text-slate-400" />
         <input
@@ -69,7 +78,6 @@ export default function Members({ members, onAddMember }) {
         />
       </motion.div>
 
-      {/* Main Members Data Grid/Table Wrapper */}
       <motion.div 
         variants={itemVariants} 
         className="bg-slate-900 border border-slate-700/60 rounded-2xl overflow-hidden shadow-xl"
@@ -119,7 +127,6 @@ export default function Members({ members, onAddMember }) {
         </div>
       </motion.div>
 
-      {/* Modal Overlay Injection Node */}
       <AnimatePresence>
         {showModal && (
           <motion.div 
@@ -156,7 +163,7 @@ export default function Members({ members, onAddMember }) {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Course Program</label>
-                    <input required type="text" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-slate-200 focus:outline-none focus:border-indigo-500 placeholder-slate-600 transition-colors" placeholder="e.g. MCA" value={formData.course} onChange={e => setFormData({...formData, course: e.target.value})} />
+                    <input required type="text" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-slate-200 focus:outline-none focus:border-indigo-500 placeholder:text-slate-600 transition-colors" placeholder="e.g. MCA" value={formData.course} onChange={e => setFormData({...formData, course: e.target.value})} />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Status Account</label>

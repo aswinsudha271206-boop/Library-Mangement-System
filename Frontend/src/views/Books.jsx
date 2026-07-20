@@ -4,20 +4,39 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Search, X } from 'lucide-react';
 import BookCard from '../components/BookCard';
 
-export default function Books({ books, onAddBook, onDeleteBook }) {
+export default function Books({ books, onAddBook, onUpdateBook, onDeleteBook }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
-  const [formData, setFormData] = useState({ title: '', author: '', isbn: '', genre: '', status: 'Available' });
+  const [editingBook, setEditingBook] = useState(null);
+  const [formData, setFormData] = useState({ title: '', author: '', isbn: '', genre: '', status: 'Available', reservation_fee: '2.00' });
 
   const filteredBooks = books.filter(book => 
     book.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     book.author.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const handleEditClick = (book) => {
+    setEditingBook(book);
+    setFormData({
+      title: book.title,
+      author: book.author,
+      isbn: book.isbn,
+      genre: book.genre,
+      status: book.status,
+      reservation_fee: book.reservation_fee ? book.reservation_fee.toString() : '2.00'
+    });
+    setShowModal(true);
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    onAddBook({ ...formData, id: Date.now() });
-    setFormData({ title: '', author: '', isbn: '', genre: '', status: 'Available' });
+    if (editingBook) {
+      onUpdateBook(editingBook.id, formData);
+      setEditingBook(null);
+    } else {
+      onAddBook({ ...formData, id: Date.now() });
+    }
+    setFormData({ title: '', author: '', isbn: '', genre: '', status: 'Available', reservation_fee: '2.00' });
     setShowModal(false);
   };
 
@@ -51,7 +70,11 @@ export default function Books({ books, onAddBook, onDeleteBook }) {
         <motion.button 
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
-          onClick={() => setShowModal(true)}
+          onClick={() => {
+            setEditingBook(null);
+            setFormData({ title: '', author: '', isbn: '', genre: '', status: 'Available', reservation_fee: '2.00' });
+            setShowModal(true);
+          }}
           className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-5 py-3 rounded-xl transition-colors shadow-lg shadow-indigo-600/20 cursor-pointer"
         >
           <Plus className="h-5 w-5" /> Add New Book
@@ -87,7 +110,7 @@ export default function Books({ books, onAddBook, onDeleteBook }) {
               exit={{ opacity: 0, scale: 0.9, y: 10 }}
               transition={{ type: "spring", stiffness: 500, damping: 35 }}
             >
-              <BookCard book={book} onDelete={onDeleteBook} />
+              <BookCard book={book} onEdit={handleEditClick} onDelete={onDeleteBook} />
             </motion.div>
           ))}
         </AnimatePresence>
@@ -116,7 +139,9 @@ export default function Books({ books, onAddBook, onDeleteBook }) {
                 <X className="h-4 w-4" />
               </button>
 
-              <h2 className="text-xl font-bold text-slate-100 mb-4">Add Book to Inventory</h2>
+              <h2 className="text-xl font-bold text-slate-100 mb-4">
+                {editingBook ? "Edit Book Details" : "Add Book to Inventory"}
+              </h2>
               
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
@@ -137,6 +162,25 @@ export default function Books({ books, onAddBook, onDeleteBook }) {
                     <input required type="text" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-slate-200 focus:outline-none focus:border-indigo-500 transition-colors" value={formData.genre} onChange={e => setFormData({...formData, genre: e.target.value})} />
                   </div>
                 </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Reservation Fee (₹)</label>
+                  <input required type="number" step="0.01" min="0" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-slate-200 focus:outline-none focus:border-indigo-500 transition-colors" value={formData.reservation_fee} onChange={e => setFormData({...formData, reservation_fee: e.target.value})} />
+                </div>
+
+                {editingBook && (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Status</label>
+                    <select 
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-slate-200 focus:outline-none focus:border-indigo-500 transition-colors cursor-pointer" 
+                      value={formData.status} 
+                      onChange={e => setFormData({...formData, status: e.target.value})}
+                    >
+                      <option value="Available">Available</option>
+                      <option value="Borrowed">Borrowed</option>
+                    </select>
+                  </div>
+                )}
                 
                 <div className="flex gap-3 mt-6">
                   <button type="button" onClick={() => setShowModal(false)} className="flex-1 border border-slate-700 text-slate-300 hover:bg-slate-700/50 py-3 rounded-xl font-medium transition-all cursor-pointer">Cancel</button>

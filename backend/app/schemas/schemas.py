@@ -1,6 +1,6 @@
 # app/schemas/schemas.py
 from pydantic import BaseModel
-
+from datetime import datetime
 # --- Existing Book Schemas ---
 class BookBase(BaseModel):
     title: str
@@ -8,9 +8,15 @@ class BookBase(BaseModel):
     isbn: str
     genre: str
     status: str
+    reservation_fee: float = 2.00
 
 class BookUpdate(BaseModel):
+    title: str
+    author: str
+    isbn: str
+    genre: str
     status: str
+    reservation_fee: float
 
 class BookResponse(BookBase):
     id: int
@@ -27,3 +33,37 @@ class TokenResponse(BaseModel):
     token_type: str
     username: str
     role: str
+
+class HoldCreate(BaseModel):
+    book_id: int
+    user_id: int
+    amount: float
+    payment_method: str
+    
+class HoldResponse(BaseModel):
+    id: int
+    book_id: int
+    user_id: int
+    status: str
+    amount: float
+    payment_method: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# --- New Student/Digital Pass Schemas ---
+class StudentCreate(BaseModel):
+    name: str
+    email: str
+    roll_number: str
+    phone: str
+    track: str
+    academic_year: str
+
+class StudentResponse(StudentCreate):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

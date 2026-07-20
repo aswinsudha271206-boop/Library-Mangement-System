@@ -1,12 +1,14 @@
 // src/components/Sidebar.jsx
 import React from 'react';
-import { LayoutDashboard, BookOpen, Users, RefreshCw, BarChart3, LogOut } from 'lucide-react';
+import { LayoutDashboard, BookOpen, Users, RefreshCw, BarChart3, LogOut, UserPlus } from 'lucide-react';
 
-export default function Sidebar({ currentView, setView }) {
+export default function Sidebar({ currentView, setView, onLogout }) {
+  // Registered application layout states including the new student configuration engine
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'books', label: 'Manage Books', icon: BookOpen },
     { id: 'members', label: 'Manage Members', icon: Users },
+    { id: 'addStudent', label: 'Provision Student', icon: UserPlus },
     { id: 'issueRegistry', label: 'Issue Registry', icon: RefreshCw },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
   ];
@@ -51,7 +53,10 @@ export default function Sidebar({ currentView, setView }) {
       </div>
 
       {/* Persistent Logout Action Button */}
-      <button className="flex items-center gap-4 px-4 py-3 text-sm font-medium text-slate-400 hover:bg-rose-950/30 hover:text-rose-400 rounded-xl transition-colors duration-200 cursor-pointer">
+      <button
+        onClick={onLogout}
+        className="flex items-center gap-4 px-4 py-3 text-sm font-medium text-slate-400 hover:bg-rose-950/30 hover:text-rose-400 rounded-xl transition-colors duration-200 cursor-pointer"
+      >
         <LogOut className="h-5 w-5" />
         Logout
       </button>

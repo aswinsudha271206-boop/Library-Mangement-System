@@ -1,11 +1,28 @@
 # app/main.py
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from passlib.context import CryptContext
 
-from app.config.database.connection import engine, SessionLocal
+# Updated import path
+from app.database.connection import engine, SessionLocal
 from app.model import models
-from app.router import books, auth # Import new auth module router
+from app.router import books, auth, holds, students
+
+# --- MULTI-IP WHITELIST CONFIGURATION ---
+ALLOWED_IPS = ["192.168.1.34", "127.0.0.1", "::1", "192.168.1.73", "10.0.0.5"]
+
+class NetworkFilterMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        # Always allow CORS preflight (OPTIONS) requests through
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
+        client_ip = request.client.host
+        print(f"DEBUG: Incoming request from IP: {client_ip}") # Check your terminal
+        if client_ip not in ALLOWED_IPS:
+            raise HTTPException(status_code=403, detail=f"Network access denied for {client_ip}")
+        return await call_next(request)
 
 # Auto-compile target application tables
 models.Base.metadata.create_all(bind=engine)
@@ -14,24 +31,54 @@ models.Base.metadata.create_all(bind=engine)
 def seed_default_user():
     db = SessionLocal()
     try:
-        # Check if any users exist
-        user_count = db.query(models.User).count()
-        if user_count == 0:
-            pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-            hashed_pw = pwd_context.hash("admin123")
-            
+        pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+        DEFAULT_ADMIN_USERNAME = "admin"
+        DEFAULT_ADMIN_PASSWORD = "admin@2026"
+        
+        admin_user = db.query(models.User).filter(models.User.role == "admin").first()
+        
+        if not admin_user:
+            hashed_pw = pwd_context.hash(DEFAULT_ADMIN_PASSWORD)
             default_admin = models.User(
-                username="admin",
+                username=DEFAULT_ADMIN_USERNAME,
                 password_hash=hashed_pw,
                 role="admin"
             )
             db.add(default_admin)
             db.commit()
-            print("Successfully seeded database with system administrator default user configuration.")
+        else:
+            updated = False
+            if admin_user.username != DEFAULT_ADMIN_USERNAME:
+                admin_user.username = DEFAULT_ADMIN_USERNAME
+                updated = True
+            
+            if not pwd_context.verify(DEFAULT_ADMIN_PASSWORD, admin_user.password_hash):
+                admin_user.password_hash = pwd_context.hash(DEFAULT_ADMIN_PASSWORD)
+                updated = True
+                
+            if updated:
+                db.commit()
     finally:
         db.close()
 
 seed_default_user()
+
+def seed_default_books():
+    db = SessionLocal()
+    try:
+        book_count = db.query(models.Book).count()
+        if book_count == 0:
+            default_books = [
+                models.Book(id=1, title="Designing Data-Intensive Applications", author="Martin Kleppmann", isbn="978-1449373320", genre="Tech", status="Available"),
+                models.Book(id=2, title="Clean Code", author="Robert C. Martin", isbn="978-0132350884", genre="Tech", status="Borrowed"),
+                # ... (truncated for brevity, keep all your initial books here)
+            ]
+            db.add_all(default_books)
+            db.commit()
+    finally:
+        db.close()
+
+seed_default_books()
 
 app = FastAPI(
     title="Alexandria API Engine",
@@ -39,10 +86,15 @@ app = FastAPI(
     description="Scalable system service interface managing library data schemas"
 )
 
-# 🛡️ CORS Cross-Origin Resource Policy Management Setup 
+# --- ADD MIDDLEWARE HERE ---
+app.add_middleware(NetworkFilterMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"], # Connects to your React layout terminal workspace
+    allow_origins=[
+        "http://localhost:8080",
+        "http://localhost:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -50,7 +102,9 @@ app.add_middleware(
 
 # Register operations router component modules
 app.include_router(books.router)
-app.include_router(auth.router) # Mount authentication router endpoints
+app.include_router(auth.router)
+app.include_router(holds.router)
+app.include_router(students.router)
 
 @app.get("/")
 def health_check():

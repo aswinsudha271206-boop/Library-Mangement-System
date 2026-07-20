@@ -2,10 +2,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
-import jwt
+from jose import jwt
 from datetime import datetime, timedelta
 
-from app.config.database.connection import get_db
+# Updated import path
+from app.database.connection import get_db
 from app.model import models
 from app.schemas import schemas
 

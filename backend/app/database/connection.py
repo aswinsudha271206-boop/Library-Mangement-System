@@ -1,10 +1,15 @@
-# app/config/database/connection.py
+# app/database/connection.py
+import os
+from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# PostgreSQL Connection String (Adjust credentials to match your local setup)
-DATABASE_URL = "postgresql://postgres:your_secure_password@localhost:5432/alexandria_db"
+# Load environment variables from .env file
+load_dotenv()
+
+# PostgreSQL Connection String — loaded from .env
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -17,4 +22,3 @@ def get_db():
         yield db
     finally:
         db.close()
-        hi

@@ -3,7 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 
-from app.config.database.connection import get_db
+# Updated import path
+from app.database.connection import get_db
 from app.model import models
 from app.schemas import schemas
 
@@ -31,14 +32,20 @@ def create_book(book: schemas.BookBase, db: Session = Depends(get_db)):
     db.refresh(new_book)
     return new_book
 
-# 🔄 PUT: Update circulation metrics or transaction status states
+# 🔄 PUT: Update entire book details in the catalog
 @router.put("/{book_id}", response_model=schemas.BookResponse)
-def update_book_status(book_id: int, book_update: schemas.BookUpdate, db: Session = Depends(get_db)):
+def update_book(book_id: int, book_update: schemas.BookUpdate, db: Session = Depends(get_db)):
     db_book = db.query(models.Book).filter(models.Book.id == book_id).first()
     if not db_book:
         raise HTTPException(status_code=404, detail="Requested book tracking record not found.")
     
+    db_book.title = book_update.title
+    db_book.author = book_update.author
+    db_book.isbn = book_update.isbn
+    db_book.genre = book_update.genre
     db_book.status = book_update.status
+    db_book.reservation_fee = book_update.reservation_fee
+    
     db.commit()
     db.refresh(db_book)
     return db_book

@@ -1,7 +1,7 @@
 import React from 'react';
-import { Bookmark, Trash2 } from 'lucide-react';
+import { Bookmark, Trash2, Edit2 } from 'lucide-react';
 
-export default function BookCard({ book, onDelete }) {
+export default function BookCard({ book, onEdit, onDelete }) {
   return (
     <div className="group bg-slate-800/40 border border-slate-700/50 rounded-2xl p-5 hover:border-indigo-500/50 transition-all duration-300 hover:shadow-xl hover:shadow-indigo-500/5 hover:-translate-y-1 flex flex-col justify-between">
       <div>
@@ -17,16 +17,23 @@ export default function BookCard({ book, onDelete }) {
         </div>
         <h3 className="text-lg font-bold text-slate-100 line-clamp-1">{book.title}</h3>
         <p className="text-sm text-slate-400 mt-1">by {book.author}</p>
-        <div className="mt-4 pt-4 border-t border-slate-700/50 flex justify-between text-xs text-slate-500">
+        <div className="mt-4 pt-4 border-t border-slate-700/50 grid grid-cols-2 gap-y-2 text-xs text-slate-500">
           <span>ISBN: {book.isbn}</span>
           <span>Genre: {book.genre}</span>
+          <span className="col-span-2 text-indigo-400 font-semibold">Hold Fee: ₹{book.reservation_fee ? book.reservation_fee.toFixed(2) : '2.00'}</span>
         </div>
       </div>
       
-      <div className="mt-6 flex justify-end">
+      <div className="mt-6 flex justify-end gap-2">
+        <button 
+          onClick={() => onEdit(book)}
+          className="p-2 text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-xl transition-all duration-200 cursor-pointer"
+        >
+          <Edit2 className="h-5 w-5" />
+        </button>
         <button 
           onClick={() => onDelete(book.id)}
-          className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-all duration-200"
+          className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-all duration-200 cursor-pointer"
         >
           <Trash2 className="h-5 w-5" />
         </button>
