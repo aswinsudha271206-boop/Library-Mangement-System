@@ -1,20 +1,75 @@
 // src/views/Home.jsx
 import React, { useState, useEffect } from 'react';
-import { Search, BookOpen, Compass, ShieldAlert, Award, Star, ArrowRight, UserPlus, CheckCircle, Database, Users, Bookmark, FileClock, AlertTriangle, Phone, Hash, Calendar, Sparkles, SearchCheck } from 'lucide-react';
+import { 
+  Search, BookOpen, Compass, ShieldAlert, Award, Star, ArrowRight, 
+  UserPlus, CheckCircle, Database, Users, Bookmark, FileClock, 
+  AlertTriangle, Phone, Hash, Calendar, Sparkles, SearchCheck, 
+  CheckCircle2, Clock, DollarSign, User, ShieldCheck, Activity, EyeOff,
+  CreditCard, Tag, GraduationCap
+} from 'lucide-react';
 
-export default function Home({ books = [], onIssueRequest }) {
+export default function Home({ books = [], members = [], transactions = [], onIssueRequest }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGenre, setSelectedGenre] = useState('All');
   const [showPassModal, setShowPassModal] = useState(false);
   const [passRequested, setPassRequested] = useState(false);
   
-  // 📋 Expanded and typed student profile form configuration schema
+  // Internal state to hold backend-fetched transactions if props are empty
+  const [fetchedTransactions, setFetchedTransactions] = useState([]);
+
+  // Auto-fetch transactions/holds safely with error suppression
+  useEffect(() => {
+    const fetchLiveHolds = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/api/holds');
+        if (response.ok) {
+          const data = await response.json();
+          setFetchedTransactions(data);
+        } else {
+          setFetchedTransactions([]);
+        }
+      } catch (err) {
+        // Silently catch network errors to keep console clean
+      }
+    };
+
+    fetchLiveHolds();
+  }, []);
+
+  // Merge prop transactions with fetched transactions
+  const activeTransactionsList = transactions.length > 0 ? transactions : fetchedTransactions;
+
+  // Read initial visibility toggle state on mount
+  const [showTransactionsOnHome, setShowTransactionsOnHome] = useState(() => {
+    const saved = localStorage.getItem('showOperationsOnHome');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+
+  // Synchronize visibility state instantly when toggled
+  useEffect(() => {
+    const syncVisibility = () => {
+      const saved = localStorage.getItem('showOperationsOnHome');
+      setShowTransactionsOnHome(saved !== null ? JSON.parse(saved) : true);
+    };
+
+    syncVisibility();
+
+    window.addEventListener('storage', syncVisibility);
+    window.addEventListener('visibilityToggle', syncVisibility);
+
+    return () => {
+      window.removeEventListener('storage', syncVisibility);
+      window.removeEventListener('visibilityToggle', syncVisibility);
+    };
+  }, []);
+
+  // 📋 Student profile form configuration schema
   const [passForm, setPassForm] = useState({ 
     name: '', 
     email: '', 
     rollNumber: '',
     phone: '',
-    track: 'MCA',
+    track: 'bachelor',
     academicYear: '1st Year'
   });
 
@@ -43,11 +98,62 @@ export default function Home({ books = [], onIssueRequest }) {
   const [holdDueDate, setHoldDueDate] = useState('');
   const [holdUserId, setHoldUserId] = useState('');
 
+  // Once the live roster arrives, verify the cached Digital Pass still points
+  // to a real, named member. If that id was deleted, or the backend record
+  // has a blank name, keep reusing it silently, which is how you end up with
+  // holds and modals stuck showing "Member ID #N" forever. Clear it instead
+  // so the person is prompted to register a fresh, valid pass.
+  useEffect(() => {
+    if (!studentData || members.length === 0) return;
+    const matched = members.find((m) => String(m.id) === String(studentData.id));
+    if (!matched || !matched.name) {
+      console.warn(
+        `Digital Pass for member #${studentData.id} is no longer valid (record missing or has a blank name) — clearing it.`
+      );
+      localStorage.removeItem("hasDigitalPass");
+      localStorage.removeItem("studentPass");
+      setHasDigitalPass(false);
+      setStudentData(null);
+    }
+  }, [members, studentData]);
+
+  // New states for Enrollment Track and Transaction Type (Book Lending / Book Sales)
+  const [enrollmentTrack, setEnrollmentTrack] = useState('bachelor');
+  const [transactionType, setTransactionType] = useState('lending');
+
+  // Auto-calculate real-time due date based on selected enrollment track option
+  useEffect(() => {
+    const today = new Date();
+    let daysToAdd = 7;
+
+    if (enrollmentTrack === 'bachelor') {
+      daysToAdd = 7;
+    } else if (enrollmentTrack === 'master') {
+      daysToAdd = 15;
+    } else if (enrollmentTrack === 'staff') {
+      daysToAdd = 15;
+    } else if (enrollmentTrack === 'phd_m_field') {
+      daysToAdd = 30;
+    }
+
+    const dueDateObj = new Date(today.setDate(today.getDate() + daysToAdd));
+    const formattedDate = dueDateObj.toISOString().split('T')[0];
+    setHoldDueDate(formattedDate);
+  }, [enrollmentTrack]);
+
+  // Auto-update amount based on whether Book Lending or Book Sales is selected
+  useEffect(() => {
+    if (transactionType === 'lending') {
+      setHoldAmount('2.00');
+    } else if (transactionType === 'sales') {
+      setHoldAmount('450.00');
+    }
+  }, [transactionType]);
+
   // 🔔 Animated Access Banner Control States & Re-mounting Key Counter
   const [showAccessAlert, setShowAccessAlert] = useState(false);
   const [alertKey, setAlertKey] = useState(0);
 
-  // Auto-dismiss the custom animated access alert banner after 4 seconds
   useEffect(() => {
     if (showAccessAlert) {
       const timer = setTimeout(() => {
@@ -57,13 +163,23 @@ export default function Home({ books = [], onIssueRequest }) {
     }
   }, [showAccessAlert, alertKey]);
 
-  // Default fallback user ID configuration for standalone sandbox execution testing
   const loggedInUserId = 1; 
 
-  // Get unique genres for filter buttons safely
+  // Resolve a member's display name for a given id: prefer the live roster
+  // fetched from the backend (always accurate), then the cached digital pass,
+  // and only fall back to a generic label if neither has the record.
+  const resolveMemberName = (id) => {
+    if (!id) return null;
+    const matched = members.find((m) => String(m.id) === String(id));
+    if (matched?.name) return matched.name;
+    if (studentData?.id && String(studentData.id) === String(id) && studentData?.name) {
+      return studentData.name;
+    }
+    return null;
+  };
+
   const genres = ['All', ...new Set(books.map(b => b.genre || 'General'))];
 
-  // Filtering Logic safely handling empty arrays or properties
   const filteredBooks = books.filter(book => {
     const matchesSearch = (book.title?.toLowerCase() || '').includes(searchTerm.toLowerCase()) || 
                           (book.author?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
@@ -72,43 +188,74 @@ export default function Home({ books = [], onIssueRequest }) {
     return matchesSearch && matchesGenre;
   });
 
-  // ⚡ Scalable Dynamic Verification Protocol: Fetches profile data automatically via ID index
- const handleVerifyRollNumber = async () => {
-  if (!passForm.rollNumber.trim()) {
-    setLookupMessage({ text: '⚠️ Please enter a Roll / Student ID first.', type: 'error' });
-    return;
-  }
-
-  setLookupLoading(true);
-  try {
-    const response = await fetch(`http://localhost:8000/api/students/verify/${passForm.rollNumber.trim()}`);
-    
-    if (response.ok) {
-      const data = await response.json();
-      setPassForm({
-        name: data.name || '',
-        email: data.email || '',
-        rollNumber: data.roll_number || passForm.rollNumber,
-        phone: data.phone || '',
-        track: data.track || 'MCA',
-        academicYear: data.academic_year || '1st Year'
-      });
-      setLookupMessage({ text: '✨ Profile verified successfully!', type: 'success' });
-    } else {
-      setLookupMessage({ text: '❌ ID not found in database.', type: 'error' });
+  const handleVerifyRollNumber = async () => {
+    if (!passForm.rollNumber.trim()) {
+      setLookupMessage({ text: '⚠️ Please enter a Roll / Student ID first.', type: 'error' });
+      return;
     }
-  } catch (err) {
-    setLookupMessage({ text: '⚠️ Database unreachable.', type: 'error' });
-  } finally {
-    setLookupLoading(false);
-  }
-};
+
+    setLookupLoading(true);
+    try {
+      const response = await fetch(`http://localhost:8000/api/students/verify/${passForm.rollNumber.trim()}`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        
+        let matchedTrack = 'bachelor';
+        const rawTrack = (data.track || '').toLowerCase();
+        if (rawTrack.includes('master') || rawTrack.includes('mca')) matchedTrack = 'master';
+        else if (rawTrack.includes('staff')) matchedTrack = 'staff';
+        else if (rawTrack.includes('phd') || rawTrack.includes('field')) matchedTrack = 'phd_m_field';
+        else if (rawTrack.includes('bachelor') || rawTrack.includes('b.tech') || rawTrack.includes('bca')) matchedTrack = 'bachelor';
+
+        setPassForm({
+          name: data.name || '',
+          email: data.email || '',
+          rollNumber: data.roll_number || passForm.rollNumber,
+          phone: data.phone || '',
+          track: matchedTrack,
+          academicYear: data.academic_year || '1st Year'
+        });
+        if (data.name && data.name.trim()) {
+          setLookupMessage({ text: '✨ Profile verified successfully!', type: 'success' });
+        } else {
+          setLookupMessage({ text: '⚠️ Found this roll number, but it has no name on file — please type it in below.', type: 'error' });
+        }
+      } else {
+        setLookupMessage({ text: '❌ ID not found in database.', type: 'error' });
+      }
+    } catch (err) {
+      setLookupMessage({ text: '⚠️ Database unreachable.', type: 'error' });
+    } finally {
+      setLookupLoading(false);
+    }
+  };
 
   const handlePassSubmit = async (e) => {
     e.preventDefault();
     setPassRequested(true);
     const completedForm = { ...passForm };
-    
+
+    const finalizePass = (data) => {
+      const profile = {
+        ...completedForm,
+        id: data?.id ?? null,
+        name: (data?.name && data.name.trim()) ? data.name : completedForm.name,
+        track: data?.track ?? completedForm.track
+      };
+      localStorage.setItem("hasDigitalPass", "true");
+      localStorage.setItem("studentPass", JSON.stringify(profile));
+      setStudentData(profile);
+      setHasDigitalPass(true);
+
+      setTimeout(() => {
+        setShowPassModal(false);
+        setPassRequested(false);
+        setPassForm({ name: '', email: '', rollNumber: '', phone: '', track: 'bachelor', academicYear: '1st Year' });
+        setLookupMessage({ text: '', type: '' });
+      }, 2000);
+    };
+
     try {
       const response = await fetch('http://localhost:8000/api/students', {
         method: 'POST',
@@ -125,42 +272,29 @@ export default function Home({ books = [], onIssueRequest }) {
         })
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to register student pass');
+      if (response.ok) {
+        const data = await response.json();
+        finalizePass(data);
+        return;
       }
 
-      // Live Backend Integration Success Path
-      localStorage.setItem("hasDigitalPass", "true");
-      localStorage.setItem("studentPass", JSON.stringify(completedForm));
-      setStudentData(completedForm);
-      setHasDigitalPass(true);
+      if (response.status === 400 && passForm.rollNumber.trim()) {
+        const lookup = await fetch(`http://localhost:8000/api/students/verify/${passForm.rollNumber.trim()}`);
+        if (lookup.ok) {
+          const existing = await lookup.json();
+          finalizePass(existing);
+          return;
+        }
+      }
 
-      setTimeout(() => {
-        setShowPassModal(false);
-        setPassRequested(false);
-        setPassForm({ name: '', email: '', rollNumber: '', phone: '', track: 'MCA', academicYear: '1st Year' });
-        setLookupMessage({ text: '', type: '' });
-      }, 2000);
+      throw new Error(`Failed to register student pass (status ${response.status})`);
 
     } catch (err) {
-      // 🔌 Sandbox Fallback: If backend server container isn't running, persist safely to sandbox local storage
-      console.warn("⚠️ Backend connection refused (http://localhost:8000). Simulating registration local sandbox workflow context.", err);
-      
-      localStorage.setItem("hasDigitalPass", "true");
-      localStorage.setItem("studentPass", JSON.stringify(completedForm));
-      setStudentData(completedForm);
-      setHasDigitalPass(true);
-
-      setTimeout(() => {
-        setShowPassModal(false);
-        setPassRequested(false);
-        setPassForm({ name: '', email: '', rollNumber: '', phone: '', track: 'MCA', academicYear: '1st Year' });
-        setLookupMessage({ text: '', type: '' });
-      }, 2000);
+      console.warn("⚠️ Could not reach backend. Falling back to sandbox pass.", err);
+      finalizePass(null);
     }
   };
 
-  // State Management Modification Layer: Clear and destroy persistent local sessions
   const handleLogout = () => {
     localStorage.removeItem("hasDigitalPass");
     localStorage.removeItem("studentPass");
@@ -168,7 +302,6 @@ export default function Home({ books = [], onIssueRequest }) {
     setStudentData(null);
   };
 
-  // Action Handler: Dispatches secure hold mutations to database tables
   const handleConfirmHoldSubmit = async () => {
     if (!activeBookForHold) return;
     
@@ -186,6 +319,8 @@ export default function Home({ books = [], onIssueRequest }) {
           user_id: parseInt(holdUserId) || loggedInUserId,
           amount: parseFloat(holdAmount) || 0.0,
           payment_method: paymentMethod,
+          enrollment_track: enrollmentTrack,   
+          transaction_type: transactionType,
           due_date: holdDueDate ? new Date(holdDueDate).toISOString() : null
         })
       });
@@ -194,6 +329,22 @@ export default function Home({ books = [], onIssueRequest }) {
 
       if (response.ok) {
         setHoldFeedback('🎉 Reservation placed successfully!');
+        
+        const newHold = {
+          id: responseData.id || Date.now(),
+          book_title: activeBookForHold.title,
+          student_name: resolveMemberName(holdUserId) || responseData.student_name || 'Verified Member',
+          user_id: holdUserId || loggedInUserId,
+          amount: parseFloat(holdAmount),
+          payment_method: paymentMethod,
+          enrollment_track: enrollmentTrack,
+          transaction_type: transactionType,
+          status: 'Active Hold',
+          created_at: new Date().toISOString(),
+          due_date: holdDueDate
+        };
+        setFetchedTransactions(prev => [newHold, ...prev]);
+
         if (onIssueRequest) onIssueRequest(activeBookForHold);
         
         setTimeout(() => {
@@ -206,8 +357,23 @@ export default function Home({ books = [], onIssueRequest }) {
         setHoldFeedback(`❌ Hold Failed: ${responseData.detail || 'Server rejected request'}`);
       }
     } catch (error) {
-      // Offline fallback handling configuration messaging
-      setHoldFeedback('⚠️ Backend offline. (Simulated Success): Reservation locked locally.');
+      setHoldFeedback('⚠️ Backend offline. Reservation locked locally.');
+      
+      const newHold = {
+        id: Date.now(),
+        book_title: activeBookForHold.title,
+        student_name: resolveMemberName(holdUserId) || 'Verified Member',
+        user_id: holdUserId || 1,
+        amount: parseFloat(holdAmount),
+        payment_method: paymentMethod,
+        enrollment_track: enrollmentTrack,
+        transaction_type: transactionType,
+        status: 'Active Hold',
+        created_at: new Date().toISOString(),
+        due_date: holdDueDate
+      };
+      setFetchedTransactions(prev => [newHold, ...prev]);
+
       if (onIssueRequest) onIssueRequest(activeBookForHold);
       
       setTimeout(() => {
@@ -224,49 +390,19 @@ export default function Home({ books = [], onIssueRequest }) {
   return (
     <div className="bg-slate-950 text-slate-100 min-h-screen selection:bg-indigo-500/30 relative overflow-x-hidden">
       
-      {/* Inject custom animation keyframes for layout components */}
       <style>{`
-        @keyframes marquee {
-          0% { transform: translateX(0%); }
-          100% { transform: translateX(-50%); }
-        }
-        @keyframes slideInAlert {
-          0% { top: -150px; opacity: 0; }
-          60% { top: 32px; opacity: 1; }
-          100% { top: 24px; opacity: 1; }
-        }
-        @keyframes shake {
-          0%, 100% { margin-left: 0; }
-          20%, 60% { margin-left: -6px; }
-          40%, 80% { margin-left: 6px; }
-        }
-        @keyframes modalFadeIn {
-          from { opacity: 0; transform: scale(0.95); }
-          to { opacity: 1; transform: scale(1); }
-        }
-        .animate-marquee {
-          display: flex;
-          width: max-content;
-          animation: marquee 25s linear infinite;
-        }
-        .animate-marquee:hover {
-          animation-play-state: paused;
-        }
-        .animate-alert-banner {
-          animation: slideInAlert 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards, shake 0.35s ease-in-out 0.4s 1;
-        }
-        .animate-modal-fade {
-          animation: modalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
+        @keyframes marquee { 0% { transform: translateX(0%); } 100% { transform: translateX(-50%); } }
+        @keyframes slideInAlert { 0% { top: -150px; opacity: 0; } 60% { top: 32px; opacity: 1; } 100% { top: 24px; opacity: 1; } }
+        @keyframes shake { 0%, 100% { margin-left: 0; } 20%, 60% { margin-left: -6px; } 40%, 80% { margin-left: 6px; } }
+        @keyframes modalFadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        .animate-marquee { display: flex; width: max-content; animation: marquee 25s linear infinite; }
+        .animate-marquee:hover { animation-play-state: paused; }
+        .animate-alert-banner { animation: slideInAlert 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards, shake 0.35s ease-in-out 0.4s 1; }
+        .animate-modal-fade { animation: modalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
       `}</style>
 
-      {/* 🔔 Floating Global Animated Warning Notification Banner System */}
       {showAccessAlert && (
-        <div 
-          key={alertKey} 
-          className="fixed left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4 pointer-events-auto animate-alert-banner"
-          style={{ top: '-150px' }}
-        >
+        <div key={alertKey} className="fixed left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4 pointer-events-auto animate-alert-banner" style={{ top: '-150px' }}>
           <div className="bg-slate-900 border-2 border-amber-500/80 shadow-2xl shadow-amber-950/50 rounded-2xl p-4 flex gap-4 items-start backdrop-blur-md">
             <div className="p-2 bg-amber-500/10 text-amber-400 rounded-xl shrink-0">
               <AlertTriangle className="h-6 w-6" />
@@ -277,26 +413,17 @@ export default function Home({ books = [], onIssueRequest }) {
                 You must register and secure a digital student access pass profile before interacting with core reservation queues.
               </p>
               <button 
-                onClick={() => {
-                  setShowAccessAlert(false);
-                  setShowPassModal(true);
-                }}
+                onClick={() => { setShowAccessAlert(false); setShowPassModal(true); }}
                 className="text-[11px] font-bold text-amber-400 hover:text-amber-300 mt-2 inline-flex items-center gap-1 transition-all"
               >
                 Claim Free Digital Pass Now &rarr;
               </button>
             </div>
-            <button 
-              onClick={() => setShowAccessAlert(false)}
-              className="text-slate-500 hover:text-slate-300 text-sm font-bold px-1 transition-colors"
-            >
-              &times;
-            </button>
+            <button onClick={() => setShowAccessAlert(false)} className="text-slate-500 hover:text-slate-300 text-sm font-bold px-1 transition-colors">&times;</button>
           </div>
         </div>
       )}
 
-      {/* 🌟 Navigation Header */}
       <header className="border-b border-slate-900 bg-slate-950/80 backdrop-blur-md sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
@@ -306,7 +433,6 @@ export default function Home({ books = [], onIssueRequest }) {
             </span>
           </div>
 
-          {/* Dynamic Switch Architecture Layer: Login & Logout Workflow Components */}
           {hasDigitalPass ? (
             <div className="flex items-center gap-4 bg-slate-900/80 border border-slate-800/80 pl-4 pr-2 py-1.5 rounded-2xl backdrop-blur-sm shadow-inner animate-modal-fade">
               <div className="flex flex-col items-end leading-tight">
@@ -317,28 +443,20 @@ export default function Home({ books = [], onIssueRequest }) {
                   {studentData?.name || "Verified Student"}
                 </span>
               </div>
-              <button 
-                onClick={handleLogout}
-                className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-bold px-3 py-2 rounded-xl text-xs border border-rose-500/20 transition-all cursor-pointer hover:shadow-lg hover:shadow-rose-950/20"
-              >
+              <button onClick={handleLogout} className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-bold px-3 py-2 rounded-xl text-xs border border-rose-500/20 transition-all cursor-pointer hover:shadow-lg hover:shadow-rose-950/20">
                 Logout
               </button>
             </div>
           ) : (
-            <button 
-              onClick={() => setShowPassModal(true)}
-              className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white font-medium px-5 py-2.5 rounded-xl transition-all shadow-lg shadow-indigo-600/20 cursor-pointer"
-            >
+            <button onClick={() => setShowPassModal(true)} className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white font-medium px-5 py-2.5 rounded-xl transition-all shadow-lg shadow-indigo-600/20 cursor-pointer">
               <UserPlus className="h-4 w-4" /> Get Digital Pass
             </button>
           )}
         </div>
       </header>
 
-      {/* 🚀 Hero Section */}
       <section className="relative overflow-hidden pt-20 pb-12 border-b border-slate-900/80">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[300px] bg-gradient-to-b from-indigo-500/10 via-cyan-500/5 to-transparent rounded-full blur-3xl pointer-events-none"></div>
-        
         <div className="max-w-4xl mx-auto text-center px-6 space-y-6">
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
             <Compass className="h-3.5 w-3.5" /> Your Gateway to Modern Engineering Literature
@@ -353,7 +471,6 @@ export default function Home({ books = [], onIssueRequest }) {
             Browse our up-to-date physical catalog collections, check active borrow status indicators, and claim your reading reservation passes instantly.
           </p>
 
-          {/* 🔍 Search Input */}
           <div className="relative max-w-xl mx-auto mt-8">
             <Search className="absolute left-4 top-4 h-5 w-5 text-slate-400" />
             <input
@@ -367,7 +484,6 @@ export default function Home({ books = [], onIssueRequest }) {
         </div>
       </section>
 
-      {/* 📊 Section 1: Quick Stats Overview */}
       <section className="max-w-7xl mx-auto px-6 pt-12 pb-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-slate-900/30 border border-slate-900 p-5 rounded-2xl flex items-center justify-between shadow-inner">
@@ -375,53 +491,40 @@ export default function Home({ books = [], onIssueRequest }) {
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Catalog</p>
               <h3 className="text-2xl font-black text-slate-100 mt-1">{books.length}</h3>
             </div>
-            <div className="p-3 bg-indigo-500/10 text-indigo-400 rounded-xl">
-              <Database className="h-5 w-5" />
-            </div>
+            <div className="p-3 bg-indigo-500/10 text-indigo-400 rounded-xl"><Database className="h-5 w-5" /></div>
           </div>
           <div className="bg-slate-900/30 border border-slate-900 p-5 rounded-2xl flex items-center justify-between shadow-inner">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Active Members</p>
               <h3 className="text-2xl font-black text-slate-100 mt-1">1,248</h3>
             </div>
-            <div className="p-3 bg-cyan-500/10 text-cyan-400 rounded-xl">
-              <Users className="h-5 w-5" />
-            </div>
+            <div className="p-3 bg-cyan-500/10 text-cyan-400 rounded-xl"><Users className="h-5 w-5" /></div>
           </div>
           <div className="bg-slate-900/30 border border-slate-900 p-5 rounded-2xl flex items-center justify-between shadow-inner">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">On Active Hold</p>
-              <h3 className="text-2xl font-black text-slate-100 mt-1 text-indigo-400">{hasDigitalPass ? "85" : "84"}</h3>
+              <h3 className="text-2xl font-black text-slate-100 mt-1 text-indigo-400">{activeTransactionsList.length || 85}</h3>
             </div>
-            <div className="p-3 bg-amber-500/10 text-amber-400 rounded-xl">
-              <Bookmark className="h-5 w-5" />
-            </div>
+            <div className="p-3 bg-amber-500/10 text-amber-400 rounded-xl"><Bookmark className="h-5 w-5" /></div>
           </div>
           <div className="bg-slate-900/30 border border-slate-900 p-5 rounded-2xl flex items-center justify-between shadow-inner">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Returned Today</p>
               <h3 className="text-2xl font-black text-slate-100 mt-1">12</h3>
             </div>
-            <div className="p-3 bg-emerald-500/10 text-emerald-400 rounded-xl">
-              <CheckCircle className="h-5 w-5" />
-            </div>
+            <div className="p-3 bg-emerald-500/10 text-emerald-400 rounded-xl"><CheckCircle className="h-5 w-5" /></div>
           </div>
         </div>
       </section>
 
-      {/* 📚 Book Explorer Section */}
       <section className="max-w-7xl mx-auto px-6 py-12">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
           <div>
             <h2 className="text-2xl font-bold text-slate-100">Explore Catalog</h2>
             <p className="text-sm text-slate-400 mt-1">Showing {filteredBooks.length} titles currently indexed</p>
           </div>
 
-          {/* 🔄 Infinite Animated Marquee Genre Filters */}
           <div className="w-full md:w-2/3 overflow-hidden relative border border-slate-900 bg-slate-950/40 rounded-2xl py-2 shadow-inner">
-            <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-slate-950 to-transparent z-10 pointer-events-none"></div>
-            <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-slate-950 to-transparent z-10 pointer-events-none"></div>
-
             <div className="animate-marquee gap-3">
               {genres.map((genre, idx) => (
                 <button
@@ -430,20 +533,7 @@ export default function Home({ books = [], onIssueRequest }) {
                   className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer shrink-0 ${
                     selectedGenre === genre 
                       ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20' 
-                      : 'bg-slate-900/50 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
-                  }`}
-                >
-                  {genre}
-                </button>
-              ))}
-              {genres.map((genre, idx) => (
-                <button
-                  key={`track2-${genre}-${idx}`}
-                  onClick={() => setSelectedGenre(genre)}
-                  className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer shrink-0 ${
-                    selectedGenre === genre 
-                      ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20' 
-                      : 'bg-slate-900/50 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                      : 'bg-slate-900/50 border-slate-800 text-slate-400 hover:text-slate-200'
                   }`}
                 >
                   {genre}
@@ -453,18 +543,14 @@ export default function Home({ books = [], onIssueRequest }) {
           </div>
         </div>
 
-        {/* 📋 Scroll Container */}
         <div className="max-h-[560px] overflow-y-auto rounded-2xl p-2 bg-slate-900/10 border border-slate-900/40 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {filteredBooks.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredBooks.map(book => (
-                <div 
-                  key={book.id} 
-                  className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-6 flex flex-col justify-between hover:border-slate-700/80 transition-all hover:-translate-y-1 shadow-md hover:shadow-xl [animation-timeline:view()] [animation-range:entry_10%_cover_30%] [@keyframes_reveal{from{opacity:0;transform:scale(0.92)_translateY(20px);}to{opacity:1;transform:scale(1)_translateY(0);}}] animate-[reveal_both]"
-                >
+                <div key={book.id} className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-6 flex flex-col justify-between hover:border-slate-700/80 transition-all hover:-translate-y-1 shadow-md hover:shadow-xl">
                   <div>
                     <div className="flex justify-between items-start mb-4">
-                      <span className="px-2.5 py-1 rounded-md bg-slate-800 text-indigo-400 text-[10px] font-mono font-bold uppercase tracking-wide">
+                      <span className="px-2.5 py-1 rounded-md bg-slate-800 text-indigo-400 text-[10px] font-mono font-bold uppercase">
                         {book.genre || 'General'}
                       </span>
                       <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
@@ -474,28 +560,39 @@ export default function Home({ books = [], onIssueRequest }) {
                         {book.status || 'Available'}
                       </span>
                     </div>
-                    <h3 className="text-lg font-bold text-slate-100 leading-snug line-clamp-2">{book.title}</h3>
+                    <h3 className="text-lg font-bold text-slate-100 line-clamp-2">{book.title}</h3>
                     <p className="text-sm text-slate-400 mt-1">by {book.author}</p>
                   </div>
 
                   <div className="mt-6 pt-4 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-500">
                     <span>ISBN: <span className="font-mono text-slate-400">{book.isbn || 'N/A'}</span></span>
-                    <button 
-                      onClick={() => {
-                        if (!hasDigitalPass) {
-                          setAlertKey(prev => prev + 1);
-                          setShowAccessAlert(true);
-                          return;
-                        }
-                        setActiveBookForHold(book);
-                        setHoldAmount(book.reservation_fee ? book.reservation_fee.toFixed(2) : '2.00');
-                        setIsHoldModalOpen(true);
-                        setHoldFeedback('');
-                      }}
-                      className="flex items-center gap-1 font-semibold text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer"
-                    >
-                      Hold <ArrowRight className="h-3.5 w-3.5" />
-                    </button>
+                    
+                    {book.status === 'Available' ? (
+                      <button 
+                        onClick={() => {
+                          if (!hasDigitalPass) {
+                            setAlertKey(prev => prev + 1);
+                            setShowAccessAlert(true);
+                            return;
+                          }
+                          setActiveBookForHold(book);
+                          setHoldAmount(book.reservation_fee ? book.reservation_fee.toFixed(2) : '2.00');
+                          setHoldUserId(studentData?.id ? String(studentData.id) : '');
+                          if (studentData?.track) {
+                            setEnrollmentTrack(studentData.track);
+                          }
+                          setIsHoldModalOpen(true);
+                          setHoldFeedback('');
+                        }}
+                        className="flex items-center gap-1 font-semibold text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer"
+                      >
+                        Hold <ArrowRight className="h-3.5 w-3.5" />
+                      </button>
+                    ) : (
+                      <span className="text-slate-600 font-semibold cursor-not-allowed select-none">
+                        Unavailable
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}
@@ -504,13 +601,11 @@ export default function Home({ books = [], onIssueRequest }) {
             <div className="text-center py-20 bg-slate-900/20 border border-dashed border-slate-800 rounded-2xl">
               <ShieldAlert className="h-10 w-10 text-slate-600 mx-auto mb-3" />
               <h3 className="text-lg font-semibold text-slate-400">No titles match your selection</h3>
-              <p className="text-sm text-slate-500 mt-1">Try expanding your filters or search keywords.</p>
             </div>
           )}
         </div>
       </section>
 
-      {/* 🏆 Feature & Policy Accolades */}
       <section className="border-t border-slate-900 bg-slate-900/20">
         <div className="max-w-7xl mx-auto px-6 py-16 grid grid-cols-1 md:grid-cols-3 gap-8">
           <div className="flex gap-4">
@@ -543,7 +638,112 @@ export default function Home({ books = [], onIssueRequest }) {
         </div>
       </section>
 
-      {/* 🕒 Section 2: Recent Library Log Activities */}
+      {showTransactionsOnHome && (
+        <section className="max-w-7xl mx-auto px-6 py-12 border-t border-slate-900/80">
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <div className="flex items-center gap-2">
+                <Activity className="h-5 w-5 text-indigo-400" />
+                <h2 className="text-2xl font-extrabold text-slate-100">Active Circulation Spotlight</h2>
+              </div>
+              <p className="text-sm text-slate-400 mt-1">Real-time status cards of active circulation loans, tracks, and return deadlines</p>
+            </div>
+            <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span> Live Stream Active
+            </span>
+          </div>
+
+          {activeTransactionsList.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {activeTransactionsList.map((tx) => (
+                <div 
+                  key={tx.id || Math.random()} 
+                  className="bg-slate-900/60 border border-slate-800/80 hover:border-indigo-500/40 rounded-2xl p-5 flex flex-col justify-between transition-all hover:-translate-y-1 shadow-lg hover:shadow-indigo-500/5 group"
+                >
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
+                        tx.status === 'Overdue'
+                          ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                          : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                      }`}>
+                        {tx.status === 'Overdue' ? <AlertTriangle className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />} {tx.status || 'Active Hold'}
+                      </span>
+                      <span className={`text-xs font-semibold bg-slate-950 px-2.5 py-1 rounded-lg border ${
+                        tx.status === 'Overdue' ? 'text-rose-400 border-rose-900/60' : 'text-amber-400 border-slate-800'
+                      }`}>
+                        {typeof tx.amount === 'number' ? `₹${tx.amount.toFixed(2)}` : (tx.fine || '₹2.00')}
+                      </span>
+                    </div>
+
+                    <div>
+                      <h3 className="text-base font-bold text-slate-100 line-clamp-1 group-hover:text-indigo-400 transition-colors">
+                        {tx.book_title || tx.bookTitle || 'Clean Code'}
+                      </h3>
+                      <div className="flex items-center gap-1.5 text-xs text-indigo-400 font-medium mt-1">
+                        <User className="h-3.5 w-3.5 shrink-0" />
+                        <span>Issued to: <strong className="text-slate-200">{resolveMemberName(tx.user_id) || tx.student_name || tx.memberName || studentData?.name || 'Verified Member'}</strong></span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-950 text-[10px] font-semibold text-slate-300 border border-slate-800">
+                        <GraduationCap className="h-3 w-3 text-cyan-400" />
+                        {tx.enrollment_track ? tx.enrollment_track.toUpperCase() : 'MCA / MASTER'}
+                      </span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-950 text-[10px] font-semibold text-slate-300 border border-slate-800">
+                        <Tag className="h-3 w-3 text-indigo-400" />
+                        {tx.transaction_type === 'sales' ? 'Book Sale' : 'Book Lending'}
+                      </span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-950 text-[10px] font-semibold text-slate-300 border border-slate-800">
+                        <CreditCard className="h-3 w-3 text-emerald-400" />
+                        {tx.payment_method || 'UPI'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 pt-3 border-t border-slate-800/80 grid grid-cols-2 gap-2 text-[11px]">
+                    <div className="bg-slate-950/60 rounded-xl p-2 border border-slate-850">
+                      <p className="text-slate-500 font-medium uppercase text-[9px] tracking-wider">Issued On</p>
+                      <p className="text-slate-300 font-mono mt-0.5">
+                        {tx.created_at ? new Date(tx.created_at).toLocaleDateString() : (tx.issueDate || '7/21/2026')}
+                      </p>
+                    </div>
+
+                    <div className="bg-slate-950/60 rounded-xl p-2 border border-slate-850">
+                      <p className="text-slate-500 font-medium uppercase text-[9px] tracking-wider">Return Due</p>
+                      <p className="text-indigo-400 font-mono mt-0.5 font-bold">
+                        {tx.due_date ? new Date(tx.due_date).toLocaleDateString() : (tx.dueDate || '8/05/2026')}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-slate-900/30 border border-dashed border-slate-800 rounded-2xl p-8 text-center text-slate-500">
+              <Activity className="h-8 w-8 mx-auto mb-2 text-slate-600" />
+              <p className="text-sm font-medium">No active circulation transactions recorded in database.</p>
+            </div>
+          )}
+        </section>
+      )}
+
+      <section className="max-w-7xl mx-auto px-6 py-12 border-t border-slate-900">
+        <div className="w-full overflow-hidden relative border border-amber-500/30 bg-amber-500/10 rounded-2xl py-2.5 mb-8 shadow-inner">
+          <div className="animate-marquee gap-10 text-xs font-semibold text-amber-200">
+            <span className="flex items-center gap-2 shrink-0">
+              <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
+              <span>Notice: After the return deadline ends, a fine of ₹25 will be added for each day overdue. Please ensure timely returns!</span>
+            </span>
+            <span className="flex items-center gap-2 shrink-0">
+              <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
+              <span>Notice: After the return deadline ends, a fine of ₹25 will be added for each day overdue. Please ensure timely returns!</span>
+            </span>
+          </div>
+        </div>
+      </section>
+
       <section className="max-w-7xl mx-auto px-6 py-12 border-t border-slate-900">
         <div className="bg-slate-900/20 border border-slate-900/60 rounded-2xl p-6">
           <div className="flex items-center gap-2 mb-4">
@@ -552,25 +752,16 @@ export default function Home({ books = [], onIssueRequest }) {
           </div>
           <div className="space-y-3">
             <div className="flex justify-between items-center bg-slate-950/40 border border-slate-900 p-3.5 rounded-xl text-xs">
-              <p className="text-slate-300"><span className="font-semibold text-indigo-400">Reo</span> reserved allocation for <span className="italic text-slate-200">'Clean Code'</span></p>
+              <p className="text-slate-300"><span className="font-semibold text-indigo-400">{studentData?.name || 'Reo'}</span> reserved allocation for <span className="italic text-slate-200">'Clean Code'</span></p>
               <span className="text-slate-500 font-mono">25 mins ago</span>
-            </div>
-            <div className="flex justify-between items-center bg-slate-950/40 border border-slate-900 p-3.5 rounded-xl text-xs">
-              <p className="text-slate-300"><span className="font-semibold text-cyan-400">Sarah Jenkins</span> released checkout hold for <span className="italic text-slate-200">'Designing Data-Intensive Applications'</span></p>
-              <span className="text-slate-500 font-mono">2 hours ago</span>
-            </div>
-            <div className="flex justify-between items-center bg-slate-950/40 border border-slate-900 p-3.5 rounded-xl text-xs">
-              <p className="text-slate-300"><span className="font-semibold text-indigo-400">Alex Rivera</span> provisioned dynamic index entry <span className="italic text-slate-200">'Rust in Action'</span></p>
-              <span className="text-slate-500 font-mono">5 hours ago</span>
             </div>
           </div>
         </div>
       </section>
 
-      {/* 🎫 Overlay Component Layer: Simple Confirm Reservation Box */}
       {isHoldModalOpen && activeBookForHold && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative overflow-hidden animate-modal-fade">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative overflow-hidden animate-modal-fade max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold text-slate-100">Request Book Reservation</h2>
             <p className="text-xs text-slate-400 mt-1 mb-4">Confirm adding this volume to your dynamic catalog hold profile tracking.</p>
 
@@ -582,36 +773,84 @@ export default function Home({ books = [], onIssueRequest }) {
 
             <div className="space-y-4 mb-5 text-left">
               <div>
-                <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1 tracking-wider">Student ID / Member Number</label>
+                <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1 tracking-wider">Member Name / ID (from your Digital Pass)</label>
                 <input
-                  type="number"
-                  placeholder="Enter Student ID"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-200 focus:outline-none focus:border-indigo-500 text-sm"
-                  value={holdUserId}
-                  onChange={(e) => setHoldUserId(e.target.value)}
+                  type="text"
+                  placeholder="Verify a Digital Pass to auto-fill this"
+                  className="w-full bg-slate-950/60 border border-slate-850 rounded-xl p-3 text-slate-300 select-none cursor-not-allowed text-sm font-mono"
+                  value={resolveMemberName(holdUserId) ? `${resolveMemberName(holdUserId)} (ID: ${holdUserId})` : (holdUserId ? `Member ID #${holdUserId}` : 'No Member Linked')}
+                  readOnly
                   required
                 />
+                <p className="text-[10px] text-emerald-400 mt-1">
+                  ✓ Automatically linked to your verified pass record ({resolveMemberName(holdUserId) || `Member ID #${holdUserId || 'N/A'}`}).
+                </p>
               </div>
+
               <div>
-                <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1 tracking-wider">Return Deadline (Due Date)</label>
+                <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1 tracking-wider">Enrollment Track (Locked to Member Profile)</label>
+                <input
+                  type="text"
+                  className="w-full bg-slate-950/60 border border-slate-850 rounded-xl p-3 text-slate-300 select-none cursor-not-allowed text-sm font-mono uppercase"
+                  value={enrollmentTrack}
+                  readOnly
+                  disabled
+                />
+                <p className="text-[10px] text-indigo-400 mt-1">
+                  ℹ️ Role and track configuration are pre-provisioned via the Manage Members registry profile.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1 tracking-wider">Return Deadline</label>
                 <input
                   type="date"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-200 focus:outline-none focus:border-indigo-500 text-sm"
+                  className="w-full bg-slate-950/60 border border-slate-850 rounded-xl p-3 text-slate-400 select-none cursor-not-allowed text-sm font-mono"
                   value={holdDueDate}
-                  onChange={(e) => setHoldDueDate(e.target.value)}
+                  readOnly
                   required
                 />
               </div>
+
               <div>
-                <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1 tracking-wider">Reservation Fee (₹)</label>
+                <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1 tracking-wider">Transaction Type</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTransactionType('lending')}
+                    className={`py-2.5 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                      transactionType === 'lending'
+                        ? 'bg-indigo-600 border-indigo-500 text-white shadow-md'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    Book Lending
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTransactionType('sales')}
+                    className={`py-2.5 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                      transactionType === 'sales'
+                        ? 'bg-indigo-600 border-indigo-500 text-white shadow-md'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    Book Sales
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1 tracking-wider">Amount ({transactionType === 'sales' ? 'Purchase Price ₹' : 'Reservation Fee ₹'})</label>
                 <input
                   type="number"
                   step="0.01"
                   readOnly
-                  className="w-full bg-slate-950/60 border border-slate-850 rounded-xl p-3 text-slate-400 select-none cursor-not-allowed text-sm"
+                  className="w-full bg-slate-950/60 border border-slate-850 rounded-xl p-3 text-slate-400 select-none cursor-not-allowed text-sm font-mono"
                   value={holdAmount}
                 />
               </div>
+
               <div>
                 <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1 tracking-wider">Payment Method</label>
                 <select
@@ -664,7 +903,6 @@ export default function Home({ books = [], onIssueRequest }) {
         </div>
       )}
 
-      {/* 📨 Member Digital Pass Modal Container */}
       {showPassModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative overflow-hidden max-h-[90vh] overflow-y-auto animate-modal-fade">
@@ -683,8 +921,36 @@ export default function Home({ books = [], onIssueRequest }) {
                 <p className="text-xs text-slate-400 mt-1 mb-4">Submit university credentials to authorize local access profiles.</p>
                 
                 <form onSubmit={handlePassSubmit} className="space-y-4">
-                  
-                  {/* ⚡ Scalable Upgrade: Roll Number Entry Box Placed First with Inline Action Button */}
+                  <div className="bg-slate-950/40 border border-slate-850 p-3.5 rounded-xl space-y-2">
+                    <label className="block text-[10px] font-semibold text-indigo-400 uppercase tracking-wider">Member Name</label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                      <input 
+                        required 
+                        type="text" 
+                        placeholder="e.g. Revaldo Ambrose" 
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 pl-10 pr-3 text-slate-200 focus:outline-none focus:border-indigo-500 placeholder:text-slate-600 text-sm font-medium" 
+                        value={passForm.name} 
+                        onChange={e => setPassForm({...passForm, name: e.target.value})} 
+                      />
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-950/40 border border-slate-850 p-3.5 rounded-xl space-y-2">
+                    <label className="block text-[10px] font-semibold text-indigo-400 uppercase tracking-wider">Email Address</label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                      <input
+                        required
+                        type="email"
+                        placeholder="e.g. revaldo@university.edu"
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 pl-10 pr-3 text-slate-200 focus:outline-none focus:border-indigo-500 placeholder:text-slate-600 text-sm font-medium"
+                        value={passForm.email}
+                        onChange={e => setPassForm({...passForm, email: e.target.value})}
+                      />
+                    </div>
+                  </div>
+
                   <div className="bg-slate-950/40 border border-slate-850 p-3.5 rounded-xl space-y-2">
                     <label className="block text-[10px] font-semibold text-indigo-400 uppercase tracking-wider">University Roll / Student ID</label>
                     <div className="flex gap-2">
@@ -709,7 +975,6 @@ export default function Home({ books = [], onIssueRequest }) {
                       </button>
                     </div>
                     
-                    {/* Real-time Dynamic Feedback Log lines */}
                     {lookupMessage.text && (
                       <p className={`text-[11px] font-medium leading-normal pt-1 ${
                         lookupMessage.type === 'success' ? 'text-emerald-400' : 
@@ -718,10 +983,7 @@ export default function Home({ books = [], onIssueRequest }) {
                         {lookupMessage.text}
                       </p>
                     )}
-                  </div>
-
-              
-                
+                  </div>         
                   <div className="flex gap-3 mt-6">
                     <button type="button" onClick={() => { setShowPassModal(false); setLookupMessage({ text: '', type: '' }); }} className="flex-1 border border-slate-800 text-slate-400 hover:bg-slate-800/40 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer">Cancel</button>
                     <button type="submit" className="flex-1 bg-gradient-to-r from-indigo-600 to-cyan-500 text-white py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer shadow-lg shadow-indigo-600/15">Request Card</button>
@@ -733,7 +995,6 @@ export default function Home({ books = [], onIssueRequest }) {
         </div>
       )}
 
-      {/* 🚀 Simple Landing Footer */}
       <footer className="border-t border-slate-900 bg-slate-950 py-8 text-center text-xs text-slate-500">
         <p>© 2026 Alexandria Library Consortium. Built for production-grade engineering catalogs.</p>
       </footer>

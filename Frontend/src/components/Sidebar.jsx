@@ -8,7 +8,6 @@ export default function Sidebar({ currentView, setView, onLogout }) {
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'books', label: 'Manage Books', icon: BookOpen },
     { id: 'members', label: 'Manage Members', icon: Users },
-    { id: 'addStudent', label: 'Provision Student', icon: UserPlus },
     { id: 'issueRegistry', label: 'Issue Registry', icon: RefreshCw },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
   ];

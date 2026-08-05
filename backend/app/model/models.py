@@ -1,5 +1,5 @@
 # app/model/models.py
-from sqlalchemy import Column, Integer, String,DateTime,ForeignKey,Float
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float
 from sqlalchemy.sql import func
 from app.database.connection import Base
 
@@ -24,15 +24,21 @@ class User(Base):
 
 class Hold(Base):
     __tablename__ = "holds"
-
+    
     id = Column(Integer, primary_key=True, index=True)
-    book_id = Column(Integer, ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
-    # Change foreign key target from users.id to students.id
-    user_id = Column(Integer, ForeignKey("students.id", ondelete="CASCADE"), nullable=False)
-    status = Column(String, default="Active", nullable=False) 
-    amount = Column(Float, default=0.0, nullable=False)
-    payment_method = Column(String, nullable=True)
+    book_id = Column(Integer, ForeignKey("books.id"), nullable=False)
+    
+    # ✅ Correctly points to students.id to match your SQL schema update
+    user_id = Column(Integer, ForeignKey("students.id"), nullable=False) 
+    
+    amount = Column(Float, default=0.0)
+    payment_method = Column(String, default="Cash")
+    status = Column(String, default="Active")
+    enrollment_track = Column(String, default="bachelor")    
+    transaction_type = Column(String, default="lending")   
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    due_date = Column(DateTime(timezone=True), nullable=True)
+    returned_at = Column(DateTime(timezone=True), nullable=True)
     
 class Student(Base):
     __tablename__ = "students"

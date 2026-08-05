@@ -2,6 +2,7 @@
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
+
 # --- Existing Book Schemas ---
 class BookBase(BaseModel):
     title: str
@@ -35,11 +36,22 @@ class TokenResponse(BaseModel):
     username: str
     role: str
 
+# --- Hold Schemas ---
+class HoldUpdate(BaseModel):
+    book_id: int
+    user_id: int
+    amount: float
+    payment_method: str
+    due_date: Optional[datetime] = None
+    status: str
+
 class HoldCreate(BaseModel):
     book_id: int
     user_id: int
     amount: float
     payment_method: str
+    enrollment_track: Optional[str] = "bachelor"  # 🆕 Added
+    transaction_type: Optional[str] = "lending"  # 🆕 Added
     due_date: Optional[datetime] = None
     
 class HoldResponse(BaseModel):
@@ -49,7 +61,9 @@ class HoldResponse(BaseModel):
     status: str
     amount: float
     payment_method: str
-    created_at: datetime
+    enrollment_track: Optional[str] = "bachelor"  
+    transaction_type: Optional[str] = "lending"  
+    created_at: Optional[datetime] = None
     due_date: Optional[datetime] = None
     returned_at: Optional[datetime] = None
     book_title: Optional[str] = None

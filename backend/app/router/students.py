@@ -28,7 +28,7 @@ def verify_student_pass(roll_number: str, db: Session = Depends(get_db)):
         )
     return student
 
-# 3. POST: Register new student
+# 3. POST: Strictly create a new student record (preventing overrides)
 @router.post("", response_model=schemas.StudentResponse, status_code=status.HTTP_201_CREATED)
 def register_student(student_data: schemas.StudentCreate, db: Session = Depends(get_db)):
     existing_student = db.query(models.Student).filter(
@@ -37,16 +37,26 @@ def register_student(student_data: schemas.StudentCreate, db: Session = Depends(
     ).first()
     
     if existing_student:
-        existing_student.name = student_data.name
-        existing_student.phone = student_data.phone
-        existing_student.track = student_data.track
-        existing_student.academic_year = student_data.academic_year
-        db.commit()
-        db.refresh(existing_student)
-        return existing_student
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A student or member with this Email or Roll ID already exists in the system registry."
+        )
         
     new_student = models.Student(**student_data.model_dump())
     db.add(new_student)
     db.commit()
     db.refresh(new_student)
     return new_student
+
+# 4. DELETE: Remove/Deprovision a student profile pass by ID
+@router.delete("/{student_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_student(student_id: int, db: Session = Depends(get_db)):
+    student = db.query(models.Student).filter(models.Student.id == student_id).first()
+    if not student:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Student profile pass not found."
+        )
+    db.delete(student)
+    db.commit()
+    return None
